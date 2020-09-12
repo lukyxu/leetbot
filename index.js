@@ -1,92 +1,76 @@
 "use strict"
+// https://discord.com/api/oauth2/authorize?client_id=754456135616036954&permissions=1074264128&scope=bot
+require('dotenv').config();
 
-let axios = require('axios')
+let Discord = require('discord.js');
+let Leetcode = require('./lib/leetcode')
 let TurndownService = require('turndown')
-const NodeCache = require( "node-cache" );
-const questionCache = new NodeCache( { stdTTL: 3600, checkperiod: 600 } );
 
+let client = new Discord.Client()
 let turndownService = new TurndownService()
 
-const urls = {
-  base: `https://leetcode.com`,
-  problems: `https://leetcode.com/api/problems/all/`,
-  graphql: `https://leetcode.com/graphql`
+const TOKEN = process.env.TOKEN
+
+client.login(TOKEN);
+
+function formatQuestion(question) {
+  let description = question.content ? turndownService.turndown(question.content) : ""
+  return `__**${question.title} #${question.questionId}**__\n` + description
 }
 
-async function getQuestions() {
-  let questions = {
-    idMap: {},
-    titleMap: {},
+client.on('ready', () => {
+  console.log(`Logged in as ${client.user.tag}!`);
+});
+
+client.on('message', async (msg) => {
+  let commands = msg.content.split(" ")
+  if (commands.length < 1 || commands[0] !== "!leetcode") {
+    return
   }
-  let res = await axios.get(urls.problems)
-  res.data.stat_status_pairs.forEach(q => {
-    let question = {
-      id: q.stat.question_id,
-      title: q.stat.question__title,
-      title_slug: q.stat.question__title_slug,
-      difficulty: q.difficulty.level,
-      paid_only: q.paid_only
+
+  if (commands.length == 1) {
+    let q = await Leetcode.getRandomQuestion()
+    msg.channel.send(formatQuestion(q),{split: true});
+    return
+  }
+
+  if (commands[1] === "help") {
+    msg.channel.send("**Leetcode Bot**\nGet good at leetcode\n\n**!leetcode**: Random Leetcode Question\n**!leetcode #<Number>**: Leetcode Question by ID\n**!leetcode <String>**: Leetcode Question by Title")
+    return
+  }
+
+  if (commands[1].startsWith("#")) {
+    let id = parseInt(commands[1].substring(1))
+    if (isNaN(id)) {
+      msg.channel.send("Please a valid question ID")
+      return
     }
-    questions.idMap[question.id] = question
-    questions.titleMap[question.title] = question
-  })
-  return questions
-}
+    try {
+      let q = await Leetcode.getQuestionById(id)
+      msg.channel.send(formatQuestion(q),{split: true});
+    } catch(err) {
+      msg.channel.send(err)
+    }
+    return
+  }
 
-async function getQuestionById(id, questions) {
-  let questionName = questions.idMap[id].title_slug
-  if (!questionName) {
-    throw "Invalid Question ID"
+  let title = commands.slice(1).join(" ")
+  try {
+    let q = await Leetcode.getQuestionByTitle(title)
+    msg.channel.send(formatQuestion(q),{split: true});
+  } catch(err) {
+    msg.channel.send(err)
   }
-  return await getQuestionInfo(questionName)
-}
 
-async function getQuestionByTitle(title, questions) {
-  let questionName = questions.titleMap[title].title_slug
-  if (!questionName) {
-    throw "Invalid Question Title"
-  }
-  return await getQuestionInfo(questionName)
-}
+  // PARSE FLAGS
+  
+  // while (commands[i] < commands.length && commands[i])
 
-async function getQuestionInfo(questionName) {
-  let cachedQuestion = questionCache.get(questionName)
-  if (cachedQuestion) {
-    return cachedQuestion
-  }
-  let query = [
-    'query questionData($titleSlug: String!) {',
-    '  question(titleSlug: $titleSlug) {',
-    '    questionId',
-    '    title',
-    '    translatedTitle',
-    '    titleSlug',
-    '    content',
-    '    translatedContent',
-    '    isPaidOnly',
-    '    difficulty',
-    '    stats',
-    '    sampleTestCase',
-    '    likes',
-    '    dislikes',
-    '    solution {\n      id\n      canSeeDetail\n      paidOnly\n      __typename\n    }',
-    '  }',
-    '}'
-  ].join('\n')
-  let req = {
-    operationName: "questionData",
-    query:query,
-    variables: {titleSlug: questionName},
-  }
-  let res = await axios.post(urls.graphql ,req)
-  let question = res.data.data.question
-  question.markdownContent = turndownService.turndown(question.content)
-  questionCache.set(questionName, question)
-  return question
-}
+});
 
 (async() => {
-  let questions = await getQuestions()
-  console.log(await getQuestionByTitle("Longest Palindromic Substring", questions))
+  // console.log(await Leetcode.getRandomQuestion())
+  // await Leetcode.getQuestionByTitle("Longest Palindromic Substring")
+  // await Leetcode.getQuestionByTitle("Longest Palindromic Substring")
 })()
 
