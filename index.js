@@ -14,8 +14,9 @@ const TOKEN = process.env.TOKEN
 client.login(TOKEN);
 
 function formatQuestion(question) {
+  console.log(question)
   let description = question.content ? turndownService.turndown(question.content) : ""
-  return `__**${question.title} #${question.questionId}**__\n` + description
+  return `__**${question.title} #${question.questionId} - ${question.difficulty}**__\n` + description +"\n\n" + `https://leetcode.com/problems/${question.titleSlug}`
 }
 
 client.on('ready', () => {
@@ -35,7 +36,7 @@ client.on('message', async (msg) => {
   }
 
   if (commands[1] === "help") {
-    msg.channel.send("**Leetcode Bot**\nGet good at leetcode\n\n**!leetcode**: Random Leetcode Question\n**!leetcode #<Number>**: Leetcode Question by ID\n**!leetcode <String>**: Leetcode Question by Title")
+    msg.channel.send("**Leetcode Bot**\nGet good at Leetcode\n\n**!leetcode**: Random Leetcode Question\n**!leetcode #<Number>**: Leetcode Question by ID\n**!leetcode <Title>**: Leetcode Question by Title\n**!leetcode <easy/medium/hard>**: Leetcode Question by Difficulty")
     return
   }
 
@@ -51,6 +52,13 @@ client.on('message', async (msg) => {
     } catch(err) {
       msg.channel.send(err)
     }
+    return
+  }
+
+  let difficulties = ['easy', 'medium', 'hard']
+  if (difficulties.includes(commands[1].toLowerCase())){
+    let q = await Leetcode.getRandomQuestion(difficulties.indexOf(commands[1].toLowerCase()))
+    msg.channel.send(formatQuestion(q),{split: true});
     return
   }
 
